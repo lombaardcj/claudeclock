@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Clock</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="usage_data.js"></script><!-- written by poll_usage.py; enables file:// mode -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #05050f;
+      color: #c8c8e8;
+      font-family: 'Space Mono', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 32px 20px 48px;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none;
+      background-image: radial-gradient(circle, #1e1e3a 1px, transparent 1px);
+      background-size: 30px 30px;
+      opacity: 0.3;
+    }
+
+    .wrap {
+      position: relative;
+      width: 100%;
+      max-width: 580px;
+    }
+
+    /* ── Tabs ── */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 36px;
+      border-bottom: 1px solid #1a1a30;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      padding: 8px 20px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: #2a2a4a;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab-btn:hover { color: #5a5a9a; }
+    .tab-btn.active {
+      color: #00d4ff;
+      border-bottom-color: #00d4ff;
+    }
+    .tab-title {
+      margin-left: auto;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: #1e1e3a;
+      align-self: center;
+      padding-right: 4px;
+      text-transform: uppercase;
+    }
+
+    /* ── Clock panel ── */
+    #clock-panel { text-align: center; }
+
+    .local-time {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: clamp(56px, 18vw, 96px);
+      letter-spacing: 8px;
+      line-height: 1;
+      margin-bottom: 10px;
+      transition: color .6s, text-shadow .6s;
+    }
+    .local-time.good {
+      color: #00ff88;
+      text-shadow: 0 0 28px rgba(0,255,136,0.35), 0 0 70px rgba(0,255,136,0.1);
+    }
+    .local-time.bad {
+      color: #ff4040;
+      text-shadow: 0 0 28px rgba(255,64,64,0.35), 0 0 70px rgba(255,64,64,0.1);
+    }
+    .answer-sub {
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 40px;
+      transition: color .6s;
+    }
+    .answer-sub.good { color: rgba(0,255,136,0.5); }
+    .answer-sub.bad  { color: rgba(255,64,64,0.5); }
+    .divider {
+      width: 100%; height: 1px;
+      background: linear-gradient(90deg, transparent, #2a2a50, transparent);
+      margin-bottom: 28px;
+    }
+    .clocks {
+      display: flex; justify-content: center;
+      gap: 48px; margin-bottom: 28px; flex-wrap: wrap;
+    }
+    .clock-block { text-align: center; }
+    .clock-label {
+      font-size: 9px; letter-spacing: 3px; color: #3a3a6a;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .clock-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 26px; letter-spacing: 3px;
+      color: #00d4ff; text-shadow: 0 0 10px rgba(0,212,255,0.25);
+    }
+    .clock-value.utc { color: #4a4a7a; text-shadow: none; }
+    .countdown-wrap {
+      background: #0c0c1e; border: 1px solid #1e1e3a;
+      border-radius: 8px; padding: 18px 24px; margin-bottom: 24px;
+    }
+    .cd-label {
+      font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+      color: #3a3a6a; margin-bottom: 8px;
+    }
+    .cd-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 34px; letter-spacing: 4px;
+      color: #ffaa00; text-shadow: 0 0 12px rgba(255,170,0,0.3);
+    }
+    .cd-until { font-size: 10px; color: #3a3a6a; letter-spacing: 1px; margin-top: 6px; }
+    .info { font-size: 11px; color: #3a3a6a; letter-spacing: 1px; line-height: 1.8; text-align: center; }
+    .info strong { color: #5a5a8a; }
+
+    /* ── Usage panel ── */
+    #usage-panel { display: none; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: #0c0c1e;
+      border: 1px solid #1e1e3a;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .kpi-card-label {
+      font-size: 10px; letter-spacing: 2px; color: #7878a8;
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+    .kpi-card-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 38px; letter-spacing: 2px; color: #00d4ff;
+      line-height: 1; margin-bottom: 8px;
+    }
+    .kpi-bar-track {
+      height: 3px; background: #111128; border-radius: 2px; margin-bottom: 6px;
+    }
+    .kpi-bar-fill {
+      height: 100%; border-radius: 2px;
+      transition: width .5s, background .5s;
+    }
+    .kpi-card-sub {
+      font-size: 10px; color: #5a5a8a; letter-spacing: 1px; margin-bottom: 12px;
+    }
+    .traj {
+      border-top: 1px solid #111128;
+      padding-top: 10px;
+    }
+    .traj-rate {
+      font-size: 10px; color: #6060a0; letter-spacing: 1px; margin-bottom: 4px;
+    }
+    .traj-eta {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; letter-spacing: 1px;
+    }
+    .traj-eta.safe     { color: #00ff88; }
+    .traj-eta.warning  { color: #ffaa00; }
+    .traj-eta.critical { color: #ff4040; }
+    .traj-eta.flat     { color: #4a4a7a; }
+
+    /* ── Chart controls ── */
+    .chart-controls {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 10px;
+    }
+    .range-btn {
+      background: none;
+      border: 1px solid #1a1a30;
+      border-radius: 3px;
+      padding: 4px 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px; letter-spacing: 2px; color: #5a5a8a;
+      cursor: pointer; text-transform: uppercase;
+      transition: all .15s;
+    }
+    .range-btn:hover { border-color: #2a2a50; color: #5a5a9a; }
+    .range-btn.active {
+      border-color: rgba(0,212,255,0.3);
+      color: #00d4ff;
+      background: rgba(0,212,255,0.04);
+    }
+    .refresh-btn {
+      margin-left: auto;
+      background: none; border: none;
+      color: #5a5a8a; cursor: pointer;
+      font-family: 'Space Mono', monospace; font-size: 11px;
+      padding: 4px 6px; transition: color .15s;
+    }
+    .refresh-btn:hover { color: #5a5a9a; }
+
+    /* ── Chart ── */
+    .chart-wrap {
+      position: relative;
+      height: 220px;
+      background: #080810;
+      border: 1px solid #111128;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    #usage-chart { display: none; }
+
+    .no-data-state {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; text-align: center; gap: 10px;
+    }
+    .no-data-state h3 {
+      font-size: 11px; letter-spacing: 2px;
+      color: #8888b8; text-transform: uppercase;
+    }
+    .no-data-state .cmd {
+      background: #0c0c1e;
+      border: 1px solid #2a2a50;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px; color: #00d4ff;
+    }
+    .no-data-state p { font-size: 10px; color: #6666a0; letter-spacing: 1px; }
+
+    .last-updated {
+      font-size: 10px; color: #4a4a7a; letter-spacing: 2px;
+      text-align: right; text-transform: uppercase;
+    }
+
+    @media (max-width: 420px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .clocks { gap: 28px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-clock" onclick="showTab('clock')">Clock</button>
+    <button class="tab-btn" id="tab-usage" onclick="showTab('usage')">Usage</button>
+    <span class="tab-title">Claude Clock</span>
+  </div>
+
+  <!-- ── Clock panel ── -->
+  <div id="clock-panel">
+    <div class="local-time" id="local-time">--:--:--</div>
+    <div class="answer-sub" id="answer-sub">checking...</div>
+    <div class="divider"></div>
+    <div class="clocks">
+      <div class="clock-block">
+        <div class="clock-label">Local Time</div>
+        <div class="clock-value" id="local-hms">--:--:--</div>
+      </div>
+      <div class="clock-block">
+        <div class="clock-label">UTC</div>
+        <div class="clock-value utc" id="utc-time">--:--:--</div>
+      </div>
+    </div>
+    <div class="countdown-wrap">
+      <div class="cd-label" id="cd-label">checking...</div>
+      <div class="cd-value" id="cd-value">--:--:--</div>
+      <div class="cd-until" id="cd-until"></div>
+    </div>
+    <div class="info" id="info"></div>
+  </div>
+
+  <!-- ── Usage panel ── -->
+  <div id="usage-panel" style="display:none">
+
+    <div class="kpi-grid">
+      <!-- 5-hour card -->
+      <div class="kpi-card">
+        <div class="kpi-card-label">5-Hour Window</div>
+        <div class="kpi-card-value" id="kpi-5h-value">—</div>
+        <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kpi-5h-bar" style="width:0%"></div></div>
+        <div class="kpi-card-sub" id="kpi-5h-sub">—</div>
+        <div class="traj">
+          <div class="traj-rate" id="kpi-5h-rate">rate: —</div>
+          <div class="traj-eta flat" id="kpi-5h-eta">—</div>
+        </div>
+      </div>
+      <!-- 7-day card -->
+      <div class="kpi-card">
+        <div class="kpi-card-label">7-Day Quota</div>
+        <div class="kpi-card-value" id="kpi-7d-value">—</div>
+        <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kpi-7d-bar" style="width:0%"></div></div>
+        <div class="kpi-card-sub" id="kpi-7d-sub">—</div>
+        <div class="traj">
+          <div class="traj-rate" id="kpi-7d-rate">rate: —</div>
+          <div class="traj-eta flat" id="kpi-7d-eta">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-controls">
+      <button class="range-btn" data-hours="6"   onclick="setRange(6)">6H</button>
+      <button class="range-btn active" data-hours="24"  onclick="setRange(24)">24H</button>
+      <button class="range-btn" data-hours="72"  onclick="setRange(72)">3D</button>
+      <button class="range-btn" data-hours="168" onclick="setRange(168)">7D</button>
+      <button class="refresh-btn" onclick="loadUsageData()" title="Refresh">↻</button>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="no-data-state" id="no-data">
+        <h3>No data yet</h3>
+        <p>Install &amp; run the poller first:</p>
+        <div class="cmd">pip install -r requirements.txt</div>
+        <div class="cmd">playwright install chromium</div>
+        <div class="cmd">python3 setup_auth.py</div>
+        <div class="cmd">python3 poll_usage.py</div>
+        <p style="margin-top:4px">then serve: <span style="color:#00d4ff">python3 -m http.server 8000</span></p>
+      </div>
+      <canvas id="usage-chart" style="display:none"></canvas>
+    </div>
+
+    <div class="last-updated" id="last-updated">—</div>
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ─────────────────────────────────────────────────────────
+//  Clock tab
+// ─────────────────────────────────────────────────────────
+const PEAK_START = 13, PEAK_END = 19;
+function pad(n) { return String(n).padStart(2,'0'); }
+function fmtCountdown(ms) {
+  const s = Math.max(0, Math.floor(ms/1000));
+  return `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
+}
+function nextWeekdayAt13(from) {
+  const d = new Date(from);
+  d.setUTCHours(PEAK_START,0,0,0);
+  d.setUTCDate(d.getUTCDate()+1);
+  while(d.getUTCDay()===0||d.getUTCDay()===6) d.setUTCDate(d.getUTCDate()+1);
+  return d;
+}
+
+function tickClock() {
+  const now = new Date();
+  const utcH = now.getUTCHours(), utcF = utcH + now.getUTCMinutes()/60;
+  const utcD = now.getUTCDay();
+  const isWkd = utcD===0||utcD===6;
+  const isPeak = !isWkd && utcF>=PEAK_START && utcF<PEAK_END;
+
+  const hms = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  document.getElementById('local-time').textContent = hms;
+  document.getElementById('local-hms').textContent  = hms;
+  document.getElementById('utc-time').textContent   =
+    `${pad(utcH)}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+
+  const ltEl  = document.getElementById('local-time');
+  const subEl = document.getElementById('answer-sub');
+  const cdLbl = document.getElementById('cd-label');
+  const cdVal = document.getElementById('cd-value');
+  const cdUnt = document.getElementById('cd-until');
+  const info  = document.getElementById('info');
+
+  let next, nextLabel;
+  if (isWkd) {
+    ltEl.className  = 'local-time good';
+    subEl.textContent = 'weekend — no throttling';
+    subEl.className = 'answer-sub good';
+    next = nextWeekdayAt13(now);
+    nextLabel = `Mon ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+    cdLbl.textContent = 'peak window opens in';
+    info.innerHTML = 'Weekends have <strong>zero throttling</strong>. Best time for heavy workloads.';
+  } else if (isPeak) {
+    ltEl.className  = 'local-time bad';
+    subEl.textContent = 'peak hours — quota drains faster';
+    subEl.className = 'answer-sub bad';
+    next = new Date(now); next.setUTCHours(PEAK_END,0,0,0);
+    nextLabel = `today ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+    cdLbl.textContent = 'off-peak resumes in';
+    info.innerHTML = 'Mon–Fri <strong>13:00–19:00 UTC</strong>: quota drains faster toward weekly limit.';
+  } else {
+    ltEl.className  = 'local-time good';
+    subEl.textContent = 'off-peak — best window';
+    subEl.className = 'answer-sub good';
+    if (utcF < PEAK_START) {
+      next = new Date(now); next.setUTCHours(PEAK_START,0,0,0);
+      nextLabel = `today ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+    } else {
+      next = nextWeekdayAt13(now);
+      nextLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][next.getDay()]} ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+    }
+    cdLbl.textContent = 'peak window starts in';
+    info.innerHTML = 'Off-peak: quota is not accelerated. Use freely outside <strong>13:00–19:00 UTC weekdays</strong>.';
+  }
+  cdVal.textContent = fmtCountdown(next-now);
+  cdUnt.textContent = `→ ${nextLabel}`;
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+// ─────────────────────────────────────────────────────────
+//  Tab switching
+// ─────────────────────────────────────────────────────────
+let currentTab = 'clock';
+function showTab(name) {
+  currentTab = name;
+  document.getElementById('clock-panel').style.display = name==='clock' ? '' : 'none';
+  document.getElementById('usage-panel').style.display = name==='usage' ? 'block' : 'none';
+  document.getElementById('tab-clock').classList.toggle('active', name==='clock');
+  document.getElementById('tab-usage').classList.toggle('active', name==='usage');
+  if (name==='usage') loadUsageData();
+}
+
+// ─────────────────────────────────────────────────────────
+//  Usage data + chart
+// ─────────────────────────────────────────────────────────
+let usageData  = null;
+let usageChart = null;
+let currentRange = 24;
+
+async function loadUsageData() {
+  // usage_data.js (written by poll_usage.py) sets window.USAGE_DATA — works from file://
+  // fetch falls back for http:// with cache-busting
+  let payload = window.USAGE_DATA || null;
+  if (!payload) {
+    try {
+      const resp = await fetch('usage_data.json?_=' + Date.now());
+      if (resp.ok) payload = await resp.json();
+    } catch { /* file:// context or not yet generated */ }
+  }
+  console.log('[claude-clock] usage payload:', payload);
+  if (!payload || !(payload.readings || []).length) { showNoData(); return; }
+  usageData = payload;
+  updateKPIs(usageData.readings);
+  renderChart(usageData.readings, currentRange);
+  document.getElementById('last-updated').textContent =
+    'last updated ' + new Date(usageData.last_updated).toLocaleString();
+}
+
+function showNoData() {
+  document.getElementById('no-data').style.display = 'flex';
+  const c = document.getElementById('usage-chart');
+  c.style.display = 'none';
+  if (usageChart) { usageChart.destroy(); usageChart = null; }
+}
+
+// ── Projection maths ──────────────────────────────────────
+function linearSlopePctPerHour(pts) {
+  if (pts.length < 2) return null;
+  const t0 = pts[0].t.getTime();
+  const xs = pts.map(p => (p.t.getTime() - t0) / 3600000);
+  const ys = pts.map(p => p.v);
+  const n = xs.length;
+  const sx = xs.reduce((a,b) => a+b, 0);
+  const sy = ys.reduce((a,b) => a+b, 0);
+  const sxy = xs.reduce((s,x,i) => s + x*ys[i], 0);
+  const sx2 = xs.reduce((s,x) => s + x*x, 0);
+  const d = n*sx2 - sx*sx;
+  return Math.abs(d) < 1e-10 ? null : (n*sxy - sx*sy) / d;
+}
+
+function stripResets(readings, key, drop = 5) {
+  let idx = 0;
+  for (let i = 1; i < readings.length; i++) {
+    if ((readings[i][key]??0) < (readings[i-1][key]??0) - drop) idx = i;
+  }
+  return readings.slice(idx);
+}
+
+function computeProjection(readings, valKey, resetAtKey, windowHours, factor) {
+  const latest  = readings[readings.length - 1];
+  const current = latest[valKey] ?? 0;
+
+  const windowStart = latest[resetAtKey]
+    ? new Date(new Date(latest[resetAtKey]) - windowHours * 3600000)
+    : new Date(Date.now() - windowHours * 3600000);
+
+  let wReadings = readings.filter(r => new Date(r.ts) >= windowStart && r[valKey] != null);
+  wReadings = stripResets(wReadings, valKey);
+
+  if (wReadings.length < 2) return { status:'nodata', current };
+
+  const pts  = wReadings.map(r => ({ t: new Date(r.ts), v: r[valKey] }));
+  const slope = linearSlopePctPerHour(pts);
+
+  if (slope === null || slope < 0.05) return { status:'flat', current };
+
+  const conservSlope  = slope * factor;           // faster = warns earlier
+  const hoursToLimit  = (100 - current) / conservSlope;
+  const eta           = new Date(Date.now() + hoursToLimit * 3600000);
+
+  const hoursToReset  = latest[resetAtKey]
+    ? (new Date(latest[resetAtKey]) - Date.now()) / 3600000
+    : null;
+  const willResetFirst = hoursToReset !== null && hoursToReset > 0 && hoursToReset < hoursToLimit;
+  const pctAtReset     = willResetFirst ? Math.min(100, current + conservSlope * hoursToReset) : null;
+
+  const status = willResetFirst ? 'safe'
+    : hoursToLimit < 0.5  ? 'critical'
+    : hoursToLimit < 2    ? 'warning'
+    : 'safe';
+
+  return { status, current, slope, conservSlope, hoursToLimit, eta, willResetFirst, pctAtReset,
+           resetAt: latest[resetAtKey] ? new Date(latest[resetAtKey]) : null };
+}
+
+function fmtHours(h) {
+  if (h < 0.1) return '< 5m';
+  if (h < 1) return `${Math.round(h*60)}m`;
+  const hr = Math.floor(h), mn = Math.round((h-hr)*60);
+  return mn > 0 ? `${hr}h ${mn}m` : `${hr}h`;
+}
+
+// ── KPI card rendering ────────────────────────────────────
+function updateKPIs(readings) {
+  const latest = readings[readings.length - 1];
+
+  // 5-hour: use current window readings
+  const p5 = computeProjection(readings, 'five_hour', 'five_hour_resets_at', 5, 1.3);
+  renderKPI('5h', p5, latest.five_hour_resets_at, '/hr', 1);
+
+  // 7-day: limit to last 48h for the rate (more responsive to recent usage)
+  const cut48 = new Date(Date.now() - 48*3600000);
+  const recent = readings.filter(r => new Date(r.ts) >= cut48);
+  const p7 = computeProjection(recent.length >= 2 ? recent : readings,
+                               'seven_day', 'seven_day_resets_at', 7*24, 1.25);
+  renderKPI('7d', p7, latest.seven_day_resets_at, '/day', 24);
+}
+
+function renderKPI(id, proj, resetAtStr, rateUnit, rateMultiplier) {
+  const pct = proj.current ?? 0;
+  document.getElementById(`kpi-${id}-value`).textContent = pct.toFixed(0) + '%';
+
+  const fill  = document.getElementById(`kpi-${id}-bar`);
+  const color = pct > 80 ? '#ff4040' : pct > 60 ? '#ffaa00' : '#00d4ff';
+  fill.style.width      = Math.min(100, pct) + '%';
+  fill.style.background = color;
+
+  // Reset time — 5h shows countdown, 7d shows day+time like the website
+  const sub = document.getElementById(`kpi-${id}-sub`);
+  if (resetAtStr) {
+    const resetAt = new Date(resetAtStr);
+    const diff = resetAt - Date.now();
+    if (id === '5h') {
+      if (diff > 0) {
+        const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000);
+        sub.textContent = `resets in ${h}h ${m}m`;
+      } else {
+        sub.textContent = 'reset due';
+      }
+    } else {
+      // e.g. "Resets Tue 1:00 AM"
+      const day  = resetAt.toLocaleDateString([], { weekday: 'short' });
+      const time = resetAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      sub.textContent = `Resets ${day} ${time}`;
+    }
+  }
+
+  // Trajectory
+  const rateEl = document.getElementById(`kpi-${id}-rate`);
+  const etaEl  = document.getElementById(`kpi-${id}-eta`);
+
+  if (proj.status === 'nodata') {
+    rateEl.textContent  = 'rate: need more readings';
+    etaEl.textContent   = '—';
+    etaEl.className     = 'traj-eta flat';
+  } else if (proj.status === 'flat') {
+    rateEl.textContent  = 'rate: no active trend';
+    etaEl.textContent   = '— idle';
+    etaEl.className     = 'traj-eta flat';
+  } else {
+    const displayRate = (proj.slope * rateMultiplier).toFixed(1);
+    const factorLabel = rateMultiplier === 1 ? '×1.3' : '×1.25';
+    rateEl.textContent = `rate: ${displayRate}%${rateUnit} (${factorLabel} conservative)`;
+
+    if (proj.willResetFirst) {
+      etaEl.textContent = `✓ resets first  (~${proj.pctAtReset?.toFixed(0)}% at reset)`;
+      etaEl.className   = 'traj-eta safe';
+    } else {
+      const timeStr = proj.eta.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      etaEl.textContent = `⚠ limit ~${timeStr}  (in ${fmtHours(proj.hoursToLimit)})`;
+      etaEl.className   = `traj-eta ${proj.status}`;
+    }
+  }
+}
+
+// ── Chart ─────────────────────────────────────────────────
+function setRange(hours) {
+  currentRange = hours;
+  document.querySelectorAll('.range-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.hours) === hours);
+  });
+  if (usageData?.readings?.length) renderChart(usageData.readings, hours);
+}
+
+function renderChart(readings, hoursBack) {
+  const cutoff   = new Date(Date.now() - hoursBack * 3600000);
+  const filtered = readings.filter(r => new Date(r.ts) >= cutoff);
+
+  const noDataEl = document.getElementById('no-data');
+  const canvas   = document.getElementById('usage-chart');
+
+  if (filtered.length < 2) {
+    noDataEl.style.display = 'flex';
+    canvas.style.display   = 'none';
+    if (usageChart) { usageChart.destroy(); usageChart = null; }
+    return;
+  }
+  noDataEl.style.display = 'none';
+  canvas.style.display   = 'block';
+
+  const labels = filtered.map(r => {
+    const d = new Date(r.ts);
+    return hoursBack <= 24
+      ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+      : d.toLocaleDateString([],{month:'short',day:'numeric'}) + ' ' +
+        d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  });
+
+  const d5 = filtered.map(r => r.five_hour ?? null);
+  const d7 = filtered.map(r => r.seven_day ?? null);
+  const sparse = filtered.length > 60;
+
+  if (usageChart) { usageChart.destroy(); usageChart = null; }
+
+  usageChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: '5-Hour Window', data: d5,
+          borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.04)',
+          borderWidth: 1.5, tension: 0.2, fill: true,
+          pointRadius: sparse ? 0 : 2, pointHoverRadius: 4, spanGaps: false },
+        { label: '7-Day Quota',   data: d7,
+          borderColor: '#ffaa00', backgroundColor: 'rgba(255,170,0,0.04)',
+          borderWidth: 1.5, tension: 0.2, fill: true,
+          pointRadius: sparse ? 0 : 2, pointHoverRadius: 4, spanGaps: false },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 150 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color:'#4a4a7a', font:{family:'Space Mono',size:9}, boxWidth:10, padding:12 } },
+        tooltip: {
+          backgroundColor:'#0c0c1e', borderColor:'#2a2a50', borderWidth:1,
+          titleColor:'#00d4ff', bodyColor:'#c8c8e8',
+          titleFont:{family:'Space Mono',size:9}, bodyFont:{family:'Space Mono',size:9},
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)??'—'}%` }
+        }
+      },
+      scales: {
+        x: {
+          grid:   { color:'#0a0a18' }, border: { color:'#111128' },
+          ticks:  { color:'#2a2a4a', font:{family:'Space Mono',size:8}, maxTicksLimit:8, maxRotation:0 }
+        },
+        y: {
+          min:0, max:100,
+          grid:   { color:'#0a0a18' }, border: { color:'#111128' },
+          ticks:  { color:'#2a2a4a', font:{family:'Space Mono',size:8},
+                    callback: v => v+'%', stepSize:25 }
+        }
+      }
+    }
+  });
+}
+
+// Auto-refresh usage data every 5 minutes when on usage tab
+setInterval(() => { if (currentTab === 'usage') loadUsageData(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
