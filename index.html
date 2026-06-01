@@ -8,6 +8,52 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="usage_data.js"></script><!-- written by poll_usage.py; enables file:// mode -->
   <style>
+    /* ── Stats panel ── */
+    #stats-panel { display: none; }
+
+    .stats-kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stats-kpi-value-green {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 38px; letter-spacing: 2px; color: #00ff88;
+      line-height: 1; margin-bottom: 8px;
+    }
+    .stats-kpi-value-amber {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 38px; letter-spacing: 2px; color: #ffaa00;
+      line-height: 1; margin-bottom: 8px;
+    }
+    .stats-kpi-value-red {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 38px; letter-spacing: 2px; color: #ff6b6b;
+      line-height: 1; margin-bottom: 8px;
+    }
+    .stats-chart-label {
+      font-size: 9px; letter-spacing: 3px; color: #3a3a5a;
+      text-transform: uppercase; margin: 14px 0 6px;
+    }
+    .stats-credit {
+      margin-top: 20px;
+      padding: 14px 16px;
+      background: #080810;
+      border: 1px solid #111128;
+      border-radius: 8px;
+      font-size: 10px; color: #4a4a7a;
+      letter-spacing: 1px; line-height: 1.8;
+      text-align: center;
+    }
+    .stats-credit a { color: #00d4ff; text-decoration: none; }
+    .stats-credit a:hover { color: #00ff88; }
+    .stats-window-note {
+      font-size: 9px; color: #3a3a5a; letter-spacing: 1px;
+      text-align: center; margin-bottom: 14px; text-transform: uppercase;
+    }
+  </style>
+  <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -273,6 +319,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-clock" onclick="showTab('clock')">Clock</button>
     <button class="tab-btn" id="tab-usage" onclick="showTab('usage')">Usage</button>
+    <button class="tab-btn" id="tab-stats" onclick="showTab('stats')">Stats</button>
     <span class="tab-title">Claude Clock</span>
   </div>
 
@@ -356,6 +403,69 @@
     </div>
 
     <div class="last-updated" id="last-updated">—</div>
+  </div>
+
+  <!-- ── Stats panel (Headroom proxy performance) ── -->
+  <div id="stats-panel" style="display:none">
+
+    <div class="stats-window-note">rolling 7-day window · via headroom proxy</div>
+
+    <div class="stats-kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-card-label">Token Reduction</div>
+        <div class="kpi-card-value" id="sk-reduction">—</div>
+        <div class="kpi-bar-track"><div class="kpi-bar-fill" id="sk-reduction-bar" style="width:0%"></div></div>
+        <div class="kpi-card-sub" id="sk-reduction-sub">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Cache Hit Rate</div>
+        <div class="stats-kpi-value-green" id="sk-cache">—</div>
+        <div class="kpi-bar-track"><div class="kpi-bar-fill" id="sk-cache-bar" style="width:0%; background:#00ff88"></div></div>
+        <div class="kpi-card-sub" id="sk-cache-sub">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Tokens Saved</div>
+        <div class="stats-kpi-value-amber" id="sk-saved">—</div>
+        <div class="kpi-card-sub" id="sk-saved-sub">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Proxy Overhead</div>
+        <div class="kpi-card-value" id="sk-overhead">—</div>
+        <div class="kpi-card-sub" id="sk-overhead-sub">—</div>
+      </div>
+    </div>
+
+    <!-- Efficiency trends chart -->
+    <div class="stats-chart-label">efficiency trends</div>
+    <div class="chart-wrap" id="s-eff-wrap">
+      <div class="no-data-state" id="s-no-data">
+        <h3>No data yet</h3>
+        <p>Run the collector first:</p>
+        <div class="cmd">cd headroom-perf &amp;&amp; python3 collect.py</div>
+        <p style="margin-top:4px">then add to cron for ongoing history</p>
+      </div>
+      <canvas id="s-eff-chart" style="display:none"></canvas>
+    </div>
+
+    <!-- Tokens saved chart -->
+    <div class="stats-chart-label" id="s-saved-label" style="display:none">tokens saved per snapshot</div>
+    <div class="chart-wrap" id="s-saved-wrap" style="height:160px; display:none">
+      <canvas id="s-saved-chart"></canvas>
+    </div>
+
+    <!-- Overhead chart -->
+    <div class="stats-chart-label" id="s-overhead-label" style="display:none">proxy overhead (ms)</div>
+    <div class="chart-wrap" id="s-overhead-wrap" style="height:160px; display:none">
+      <canvas id="s-overhead-chart"></canvas>
+    </div>
+
+    <div class="last-updated" id="stats-last-updated">—</div>
+
+    <div class="stats-credit">
+      Stats sourced from <strong>Headroom</strong> — a context optimisation proxy that reduces tokens
+      sent to Claude by compressing and caching conversation history.<br>
+      <a href="https://headroom-docs.vercel.app/docs" target="_blank" rel="noopener">headroom-docs.vercel.app/docs</a>
+    </div>
   </div>
 
 </div><!-- /wrap -->
@@ -444,9 +554,12 @@ function showTab(name) {
   history.pushState(null, '', '#' + name);
   document.getElementById('clock-panel').style.display = name==='clock' ? '' : 'none';
   document.getElementById('usage-panel').style.display = name==='usage' ? 'block' : 'none';
+  document.getElementById('stats-panel').style.display = name==='stats' ? 'block' : 'none';
   document.getElementById('tab-clock').classList.toggle('active', name==='clock');
   document.getElementById('tab-usage').classList.toggle('active', name==='usage');
+  document.getElementById('tab-stats').classList.toggle('active', name==='stats');
   if (name==='usage') loadUsageData();
+  if (name==='stats') loadStatsData();
 }
 
 // ─────────────────────────────────────────────────────────
@@ -819,8 +932,220 @@ function renderRateChart(filtered, hoursBack) {
 // Auto-refresh usage data every 5 minutes when on usage tab
 setInterval(() => { if (currentTab === 'usage') loadUsageData(); }, 5 * 60 * 1000);
 
+// ─────────────────────────────────────────────────────────
+//  Stats tab — Headroom proxy performance
+// ─────────────────────────────────────────────────────────
+let statsData      = null;
+let sEffChart      = null;
+let sSavedChart    = null;
+let sOverheadChart = null;
+
+function fmtTokens(n) {
+  if (n == null) return '—';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return String(n);
+}
+
+async function loadStatsData() {
+  let payload = null;
+  try {
+    const resp = await fetch('headroom-perf/perf_data.json?_=' + Date.now());
+    if (resp.ok) payload = await resp.json();
+  } catch { /* server not running or file not yet generated */ }
+
+  if (!payload || !(payload.readings || []).length) {
+    showStatsNoData(); return;
+  }
+  statsData = payload;
+  renderStatsKPIs(statsData.readings);
+  renderStatsCharts(statsData.readings);
+  document.getElementById('stats-last-updated').textContent =
+    'last updated ' + new Date(statsData.last_updated).toLocaleString();
+}
+
+function showStatsNoData() {
+  document.getElementById('s-no-data').style.display = 'flex';
+  document.getElementById('s-eff-chart').style.display = 'none';
+  document.getElementById('s-saved-wrap').style.display = 'none';
+  document.getElementById('s-saved-label').style.display = 'none';
+  document.getElementById('s-overhead-wrap').style.display = 'none';
+  document.getElementById('s-overhead-label').style.display = 'none';
+  [sEffChart, sSavedChart, sOverheadChart].forEach(c => { if (c) c.destroy(); });
+  sEffChart = sSavedChart = sOverheadChart = null;
+}
+
+function renderStatsKPIs(readings) {
+  const r = readings[readings.length - 1];
+
+  // Token reduction
+  const redPct = r.reduction_pct ?? 0;
+  document.getElementById('sk-reduction').textContent = redPct.toFixed(1) + '%';
+  const redBar = document.getElementById('sk-reduction-bar');
+  redBar.style.width = Math.min(100, redPct * 5) + '%'; // scale: 20% reduction = full bar
+  redBar.style.background = redPct > 15 ? '#00ff88' : redPct > 8 ? '#00d4ff' : '#ffaa00';
+  document.getElementById('sk-reduction-sub').textContent =
+    r.tokens_in ? fmtTokens(r.tokens_in) + ' → ' + fmtTokens(r.tokens_out) : '—';
+
+  // Cache hit rate
+  const hitPct = r.cache_hit_rate ?? 0;
+  document.getElementById('sk-cache').textContent = hitPct.toFixed(1) + '%';
+  const cacheBar = document.getElementById('sk-cache-bar');
+  cacheBar.style.width = Math.min(100, hitPct) + '%';
+  document.getElementById('sk-cache-sub').textContent =
+    r.cache_read_tokens ? fmtTokens(r.cache_read_tokens) + ' read cached' : '—';
+
+  // Tokens saved
+  document.getElementById('sk-saved').textContent = fmtTokens(r.tokens_saved);
+  document.getElementById('sk-saved-sub').textContent =
+    r.requests ? r.requests + ' reqs · ' + r.window_hours + 'h window' : '—';
+
+  // Overhead
+  const ms = r.overhead_avg_ms ?? 0;
+  const overheadEl = document.getElementById('sk-overhead');
+  overheadEl.textContent = ms + 'ms';
+  overheadEl.className = ms > 1000 ? 'stats-kpi-value-red'
+                       : ms > 500  ? 'stats-kpi-value-amber'
+                       : 'kpi-card-value';
+  document.getElementById('sk-overhead-sub').textContent =
+    r.overhead_max_ms ? 'max ' + r.overhead_max_ms + 'ms' : '—';
+}
+
+function renderStatsCharts(readings) {
+  if (readings.length < 2) { showStatsNoData(); return; }
+
+  document.getElementById('s-no-data').style.display = 'none';
+  document.getElementById('s-eff-chart').style.display = 'block';
+  document.getElementById('s-saved-wrap').style.display = 'block';
+  document.getElementById('s-saved-label').style.display = 'block';
+  document.getElementById('s-overhead-wrap').style.display = 'block';
+  document.getElementById('s-overhead-label').style.display = 'block';
+
+  const sparse = readings.length > 60;
+  const labels = readings.map(r => {
+    const d = new Date(r.ts);
+    return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' +
+           d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  });
+
+  const chartDefaults = {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 150 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color:'#9090c0', font:{family:'Space Mono', size:11}, boxWidth:10, padding:12 } },
+      tooltip: {
+        backgroundColor:'#0c0c1e', borderColor:'#2a2a50', borderWidth:1,
+        titleColor:'#00d4ff', bodyColor:'#c8c8e8',
+        titleFont:{family:'Space Mono', size:10}, bodyFont:{family:'Space Mono', size:10},
+      }
+    },
+    scales: {
+      x: {
+        grid:  { color:'#0a0a18' }, border: { color:'#111128' },
+        ticks: { color:'#7878a8', font:{family:'Space Mono', size:10}, maxTicksLimit:6, maxRotation:0 }
+      }
+    }
+  };
+
+  // ── Efficiency chart: reduction% + cache hit rate ──────
+  if (sEffChart) { sEffChart.destroy(); sEffChart = null; }
+  sEffChart = new Chart(document.getElementById('s-eff-chart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Token Reduction %', data: readings.map(r => r.reduction_pct ?? null),
+          borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.05)',
+          borderWidth: 1.5, tension: 0.2, fill: true,
+          pointRadius: sparse ? 0 : 2, pointHoverRadius: 4, spanGaps: false },
+        { label: 'Cache Hit Rate %', data: readings.map(r => r.cache_hit_rate ?? null),
+          borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,0.04)',
+          borderWidth: 1.5, tension: 0.2, fill: true,
+          pointRadius: sparse ? 0 : 2, pointHoverRadius: 4, spanGaps: false },
+      ]
+    },
+    options: { ...chartDefaults,
+      scales: { ...chartDefaults.scales,
+        y: { min:0, max:100,
+          grid:  { color:'#0a0a18' }, border: { color:'#111128' },
+          ticks: { color:'#7878a8', font:{family:'Space Mono', size:10},
+                   callback: v => v + '%', stepSize: 25 }
+        }
+      },
+      plugins: { ...chartDefaults.plugins,
+        tooltip: { ...chartDefaults.plugins.tooltip,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1) ?? '—'}%` }
+        }
+      }
+    }
+  });
+
+  // ── Tokens saved chart ─────────────────────────────────
+  if (sSavedChart) { sSavedChart.destroy(); sSavedChart = null; }
+  sSavedChart = new Chart(document.getElementById('s-saved-chart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Tokens Saved', data: readings.map(r => r.tokens_saved ?? null),
+          backgroundColor: 'rgba(255,170,0,0.3)', borderColor: '#ffaa00',
+          borderWidth: 1, borderRadius: 2, spanGaps: false }
+      ]
+    },
+    options: { ...chartDefaults,
+      scales: { ...chartDefaults.scales,
+        y: { suggestedMin: 0,
+          grid:  { color:'#0a0a18' }, border: { color:'#111128' },
+          ticks: { color:'#7878a8', font:{family:'Space Mono', size:10},
+                   callback: v => fmtTokens(v) }
+        }
+      },
+      plugins: { ...chartDefaults.plugins,
+        tooltip: { ...chartDefaults.plugins.tooltip,
+          callbacks: { label: ctx => ` Tokens Saved: ${fmtTokens(ctx.parsed.y)}` }
+        }
+      }
+    }
+  });
+
+  // ── Overhead chart ─────────────────────────────────────
+  if (sOverheadChart) { sOverheadChart.destroy(); sOverheadChart = null; }
+  sOverheadChart = new Chart(document.getElementById('s-overhead-chart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Avg Overhead (ms)', data: readings.map(r => r.overhead_avg_ms ?? null),
+          borderColor: '#ff6b6b', backgroundColor: 'rgba(255,107,107,0.05)',
+          borderWidth: 1.5, tension: 0.2, fill: true,
+          pointRadius: sparse ? 0 : 2, pointHoverRadius: 4, spanGaps: false }
+      ]
+    },
+    options: { ...chartDefaults,
+      scales: { ...chartDefaults.scales,
+        y: { suggestedMin: 0,
+          grid:  { color:'#0a0a18' }, border: { color:'#111128' },
+          ticks: { color:'#7878a8', font:{family:'Space Mono', size:10},
+                   callback: v => v + 'ms' }
+        }
+      },
+      plugins: { ...chartDefaults.plugins,
+        tooltip: { ...chartDefaults.plugins.tooltip,
+          callbacks: { label: ctx => ` Overhead: ${ctx.parsed.y ?? '—'}ms` }
+        }
+      }
+    }
+  });
+}
+
+// Auto-refresh stats every 5 minutes when on stats tab
+setInterval(() => { if (currentTab === 'stats') loadStatsData(); }, 5 * 60 * 1000);
+
 // Restore tab from URL hash on load (e.g. navigating to /#usage)
 if (location.hash === '#usage') showTab('usage');
+if (location.hash === '#stats') showTab('stats');
 </script>
 </body>
 </html>
