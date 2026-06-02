@@ -48,6 +48,39 @@
     }
     .stats-credit a { color: #00d4ff; text-decoration: none; }
     .stats-credit a:hover { color: #00ff88; }
+
+    /* ── Nerds only ── */
+    .nerds-toggle {
+      display: flex; align-items: center; gap: 8px;
+      cursor: pointer; user-select: none;
+      margin-top: 20px; padding-top: 14px;
+      border-top: 1px solid #111128;
+      font-family: 'Space Mono', monospace;
+      font-size: 9px; letter-spacing: 3px;
+      text-transform: uppercase; color: #3a3a5a;
+      transition: color .15s;
+    }
+    .nerds-toggle:hover { color: #6a6a9a; }
+    .nerds-arrow { font-size: 8px; }
+    .nerds-section { margin-top: 12px; }
+    .nerds-group { margin-bottom: 10px; }
+    .nerds-group-label {
+      font-size: 8px; letter-spacing: 3px; text-transform: uppercase;
+      color: #2a2a4a; border-bottom: 1px solid #111128;
+      padding-bottom: 3px; margin-bottom: 4px;
+    }
+    .nerds-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1px 12px;
+    }
+    .nerds-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-family: 'Share Tech Mono', monospace; font-size: 11px;
+      padding: 3px 0; border-bottom: 1px solid #0a0a18;
+    }
+    .nerds-key { color: #4a4a6a; }
+    .nerds-val { color: #8888b8; text-align: right; }
+    .nerds-val.hi { color: #00d4ff; }
+
     .stats-window-note {
       font-size: 9px; color: #3a3a5a; letter-spacing: 1px;
       text-align: center; margin-bottom: 14px; text-transform: uppercase;
@@ -433,6 +466,24 @@
         <div class="kpi-card-value" id="sk-overhead">—</div>
         <div class="kpi-card-sub" id="sk-overhead-sub">—</div>
       </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Requests</div>
+        <div class="stats-kpi-value-green" id="sk-requests">—</div>
+        <div class="kpi-card-sub" id="sk-requests-sub">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Avg Tokens / Req</div>
+        <div class="kpi-card-value" id="sk-tokrate">—</div>
+        <div class="kpi-card-sub" id="sk-tokrate-sub">—</div>
+      </div>
+    </div>
+
+    <div class="chart-controls">
+      <button class="range-btn" data-shours="6"   onclick="setStatsRange(6)">6H</button>
+      <button class="range-btn active" data-shours="24"  onclick="setStatsRange(24)">24H</button>
+      <button class="range-btn" data-shours="72"  onclick="setStatsRange(72)">3D</button>
+      <button class="range-btn" data-shours="168" onclick="setStatsRange(168)">7D</button>
+      <button class="refresh-btn" onclick="loadStatsData()" title="Refresh">↻</button>
     </div>
 
     <!-- Efficiency trends chart -->
@@ -460,6 +511,78 @@
     </div>
 
     <div class="last-updated" id="stats-last-updated">—</div>
+
+    <!-- ── Nerds only ── -->
+    <div class="nerds-toggle" onclick="toggleNerds()">
+      <span class="nerds-arrow" id="nerds-arrow">▶</span> nerds only
+    </div>
+    <div id="nerds-section" class="nerds-section" style="display:none">
+
+      <div class="nerds-group">
+        <div class="nerds-group-label">routing</div>
+        <div class="nerds-grid">
+          <div class="nerds-row"><span class="nerds-key">compressed</span><span class="nerds-val" id="nn-rt-comp">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">excluded</span><span class="nerds-val" id="nn-rt-excl">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">skipped</span><span class="nerds-val" id="nn-rt-skip">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">unchanged</span><span class="nerds-val" id="nn-rt-unch">—</span></div>
+        </div>
+      </div>
+
+      <div class="nerds-group">
+        <div class="nerds-group-label">cache</div>
+        <div class="nerds-grid">
+          <div class="nerds-row"><span class="nerds-key">read tokens</span><span class="nerds-val" id="nn-ca-read">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">write tokens</span><span class="nerds-val" id="nn-ca-write">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">unstable</span><span class="nerds-val" id="nn-ca-unstab">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">first-5 read</span><span class="nerds-val" id="nn-ca-f5r">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">first-5 write</span><span class="nerds-val" id="nn-ca-f5w">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">last-5 read</span><span class="nerds-val" id="nn-ca-l5r">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">last-5 write</span><span class="nerds-val" id="nn-ca-l5w">—</span></div>
+        </div>
+      </div>
+
+      <div class="nerds-group">
+        <div class="nerds-group-label">conversations</div>
+        <div class="nerds-grid">
+          <div class="nerds-row"><span class="nerds-key">msgs min/avg/max</span><span class="nerds-val" id="nn-cv-msgs">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">overhead &gt;500ms</span><span class="nerds-val" id="nn-ov-over">—</span></div>
+        </div>
+      </div>
+
+      <div class="nerds-group">
+        <div class="nerds-group-label">context retention</div>
+        <div class="nerds-grid">
+          <div class="nerds-row"><span class="nerds-key">reduction</span><span class="nerds-val hi" id="nn-cr-red">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">tokens saved</span><span class="nerds-val" id="nn-cr-saved">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">uses</span><span class="nerds-val" id="nn-cr-uses">—</span></div>
+        </div>
+      </div>
+
+      <div class="nerds-group">
+        <div class="nerds-group-label">toin</div>
+        <div class="nerds-grid">
+          <div class="nerds-row"><span class="nerds-key">patterns</span><span class="nerds-val" id="nn-to-patt">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">compressions</span><span class="nerds-val" id="nn-to-comp">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">retrievals</span><span class="nerds-val" id="nn-to-retr">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">retrieval rate</span><span class="nerds-val hi" id="nn-to-rate">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">strategies</span><span class="nerds-val" id="nn-to-strat">—</span></div>
+        </div>
+      </div>
+
+      <div class="nerds-group">
+        <div class="nerds-group-label">models</div>
+        <div id="nn-models"></div>
+      </div>
+
+      <div class="nerds-group">
+        <div class="nerds-group-label">window · log</div>
+        <div class="nerds-grid">
+          <div class="nerds-row"><span class="nerds-key">window</span><span class="nerds-val" id="nn-wn-range">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">log lines</span><span class="nerds-val" id="nn-lg-lines">—</span></div>
+        </div>
+      </div>
+
+    </div><!-- /nerds-section -->
 
     <div class="stats-credit">
       Stats sourced from <strong>Headroom</strong> — a context optimisation proxy that reduces tokens
@@ -935,10 +1058,28 @@ setInterval(() => { if (currentTab === 'usage') loadUsageData(); }, 5 * 60 * 100
 // ─────────────────────────────────────────────────────────
 //  Stats tab — Headroom proxy performance
 // ─────────────────────────────────────────────────────────
-let statsData      = null;
-let sEffChart      = null;
-let sSavedChart    = null;
-let sOverheadChart = null;
+let statsData        = null;
+let sEffChart        = null;
+let sSavedChart      = null;
+let sOverheadChart   = null;
+let currentStatsRange = 24;
+
+function filterStatsReadings(readings, hoursBack) {
+  const cutoff = new Date(Date.now() - hoursBack * 3600000);
+  const filtered = readings.filter(r => new Date(r.ts) >= cutoff);
+  return filtered.length ? filtered : readings.slice(-1);
+}
+
+function setStatsRange(hours) {
+  currentStatsRange = hours;
+  document.querySelectorAll('[data-shours]').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.shours) === hours));
+  if (statsData?.readings?.length) {
+    const filtered = filterStatsReadings(statsData.readings, hours);
+    renderStatsKPIs(filtered);
+    renderStatsCharts(filtered);
+  }
+}
 
 function fmtTokens(n) {
   if (n == null) return '—';
@@ -959,8 +1100,9 @@ async function loadStatsData() {
     showStatsNoData(); return;
   }
   statsData = payload;
-  renderStatsKPIs(statsData.readings);
-  renderStatsCharts(statsData.readings);
+  const filtered = filterStatsReadings(statsData.readings, currentStatsRange);
+  renderStatsKPIs(filtered);
+  renderStatsCharts(filtered);
   document.getElementById('stats-last-updated').textContent =
     'last updated ' + new Date(statsData.last_updated).toLocaleString();
 }
@@ -1010,6 +1152,100 @@ function renderStatsKPIs(readings) {
                        : 'kpi-card-value';
   document.getElementById('sk-overhead-sub').textContent =
     r.overhead_max_ms ? 'max ' + r.overhead_max_ms + 'ms' : '—';
+
+  // Requests
+  document.getElementById('sk-requests').textContent =
+    r.requests != null ? r.requests.toLocaleString() : '—';
+  document.getElementById('sk-requests-sub').textContent =
+    r.window_hours ? `${(r.window_hours / 24).toFixed(0)}d window` : '—';
+
+  // Avg tokens / request
+  if (r.requests && r.tokens_in != null && r.tokens_out != null) {
+    const avgTotal = Math.round((r.tokens_in + r.tokens_out) / r.requests);
+    const avgIn    = Math.round(r.tokens_in  / r.requests);
+    const avgOut   = Math.round(r.tokens_out / r.requests);
+    document.getElementById('sk-tokrate').textContent = fmtTokens(avgTotal);
+    document.getElementById('sk-tokrate-sub').textContent =
+      `in ${fmtTokens(avgIn)} · out ${fmtTokens(avgOut)}`;
+  } else {
+    document.getElementById('sk-tokrate').textContent = '—';
+    document.getElementById('sk-tokrate-sub').textContent = '—';
+  }
+
+  renderNerds(r);
+}
+
+let nerdsOpen = false;
+
+function toggleNerds() {
+  nerdsOpen = !nerdsOpen;
+  document.getElementById('nerds-section').style.display = nerdsOpen ? 'block' : 'none';
+  document.getElementById('nerds-arrow').textContent = nerdsOpen ? '▼' : '▶';
+}
+
+function renderNerds(r) {
+  if (!r) return;
+
+  // Routing
+  const fmtRoute = (n, pct) => n != null ? `${n.toLocaleString()} (${pct}%)` : '—';
+  document.getElementById('nn-rt-comp').textContent = fmtRoute(r.routing_compressed, r.routing_compressed_pct);
+  document.getElementById('nn-rt-excl').textContent = fmtRoute(r.routing_excluded,   r.routing_excluded_pct);
+  document.getElementById('nn-rt-skip').textContent = fmtRoute(r.routing_skipped,    r.routing_skipped_pct);
+  document.getElementById('nn-rt-unch').textContent = fmtRoute(r.routing_unchanged,  r.routing_unchanged_pct);
+
+  // Cache
+  document.getElementById('nn-ca-read').textContent  = fmtTokens(r.cache_read_tokens);
+  document.getElementById('nn-ca-write').textContent = fmtTokens(r.cache_write_tokens);
+  const unstabPct = r.cache_unstable_checked
+    ? ((r.cache_unstable / r.cache_unstable_checked) * 100).toFixed(1) : null;
+  document.getElementById('nn-ca-unstab').textContent = r.cache_unstable != null
+    ? `${r.cache_unstable}/${r.cache_unstable_checked} (${unstabPct}%)` : '—';
+  document.getElementById('nn-ca-f5r').textContent = fmtTokens(r.cache_first5_read);
+  document.getElementById('nn-ca-f5w').textContent = fmtTokens(r.cache_first5_write);
+  document.getElementById('nn-ca-l5r').textContent = fmtTokens(r.cache_last5_read);
+  document.getElementById('nn-ca-l5w').textContent = fmtTokens(r.cache_last5_write);
+
+  // Conversations / Overhead
+  document.getElementById('nn-cv-msgs').textContent = r.conv_avg_msgs != null
+    ? `${r.conv_min_msgs} / ${r.conv_avg_msgs} / ${r.conv_max_msgs}` : '—';
+  document.getElementById('nn-ov-over').textContent = r.overhead_over500ms != null
+    ? `${r.overhead_over500ms} reqs` : '—';
+
+  // Context Retention
+  document.getElementById('nn-cr-red').textContent   = r.cr_reduction_pct != null ? r.cr_reduction_pct + '%' : '—';
+  document.getElementById('nn-cr-saved').textContent = fmtTokens(r.cr_tokens_saved);
+  document.getElementById('nn-cr-uses').textContent  = r.cr_uses?.toLocaleString() ?? '—';
+
+  // TOIN
+  document.getElementById('nn-to-patt').textContent  = r.toin_patterns?.toLocaleString()    ?? '—';
+  document.getElementById('nn-to-comp').textContent  = r.toin_compressions?.toLocaleString() ?? '—';
+  document.getElementById('nn-to-retr').textContent  = r.toin_retrievals?.toLocaleString()   ?? '—';
+  document.getElementById('nn-to-rate').textContent  = r.toin_retrieval_rate != null ? r.toin_retrieval_rate + '%' : '—';
+  document.getElementById('nn-to-strat').textContent = r.toin_strategies
+    ? Object.entries(r.toin_strategies).map(([k, v]) => `${k}:${v}`).join(' · ') : '—';
+
+  // Models
+  const modelsEl = document.getElementById('nn-models');
+  if (r.models?.length) {
+    modelsEl.innerHTML = r.models.map(m => `
+      <div class="nerds-grid" style="margin-bottom:2px">
+        <div class="nerds-row" style="grid-column:1/-1">
+          <span class="nerds-key" style="color:#6a6a9a">${m.name}</span>
+          <span class="nerds-val">${m.reqs} reqs</span>
+        </div>
+        <div class="nerds-row"><span class="nerds-key">reduction</span><span class="nerds-val hi">${m.reduction_pct}%</span></div>
+        <div class="nerds-row"><span class="nerds-key">saved</span><span class="nerds-val">${fmtTokens(m.tokens_saved)}</span></div>
+        <div class="nerds-row"><span class="nerds-key">cost est.</span><span class="nerds-val">$${m.cost_estimate?.toFixed(2) ?? '—'}</span></div>
+      </div>`).join('');
+  } else {
+    modelsEl.textContent = '—';
+  }
+
+  // Window · Log
+  document.getElementById('nn-wn-range').textContent = r.window_start && r.window_end
+    ? r.window_start.split(' ')[0] + ' → ' + r.window_end.split(' ')[0] : '—';
+  document.getElementById('nn-lg-lines').textContent = r.log_lines != null
+    ? `${r.log_lines.toLocaleString()} (${r.log_files} file${r.log_files !== 1 ? 's' : ''})` : '—';
 }
 
 function renderStatsCharts(readings) {
@@ -1025,8 +1261,10 @@ function renderStatsCharts(readings) {
   const sparse = readings.length > 60;
   const labels = readings.map(r => {
     const d = new Date(r.ts);
-    return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' +
-           d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    return currentStatsRange <= 24
+      ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+      : d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' +
+        d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   });
 
   const chartDefaults = {
