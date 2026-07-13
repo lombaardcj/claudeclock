@@ -125,6 +125,22 @@ def parse_perf(output: str) -> dict:
     if m:
         d["overhead_over500ms"] = int(m.group(1))
 
+    # ── Throughput (headroom >= 0.27) ────────────────────────────────────────
+    m = re.search(r"Input \(wall-clock\):\s+([\d,.]+) tok/s", output)
+    if m:
+        d["tp_input_wallclock"] = _float(m.group(1).replace(",", ""))
+
+    for label, key in [
+        ("Input \\(active p50/95\\)", "tp_input"),
+        ("Compression \\(p50/95\\)", "tp_compress"),
+        ("Forward \\(p50/95\\)", "tp_forward"),
+        ("Generation \\(p50/95\\)", "tp_gen"),
+    ]:
+        m = re.search(rf"{label}:\s+([\d,.]+) / ([\d,.]+) tok/s", output)
+        if m:
+            d[f"{key}_p50"] = _float(m.group(1).replace(",", ""))
+            d[f"{key}_p95"] = _float(m.group(2).replace(",", ""))
+
     # ── Conversation size ────────────────────────────────────────────────────
     m = re.search(r"Min msgs:\s+(\d+)", output)
     if m:
@@ -174,9 +190,9 @@ def parse_perf(output: str) -> dict:
     if m:
         d["toin_patterns"] = int(m.group(1))
 
-    m = re.search(r"Compressions:\s+(\d+)", output)
+    m = re.search(r"Compressions:\s+([\d,]+)", output)
     if m:
-        d["toin_compressions"] = int(m.group(1))
+        d["toin_compressions"] = _int(m.group(1))
 
     m = re.search(r"Retrievals:\s+(\d+)\s+\(([\d.]+)%\)", output)
     if m:
@@ -189,6 +205,13 @@ def parse_perf(output: str) -> dict:
         toin_strategies[m.group(2)] = int(m.group(1))
     if toin_strategies:
         d["toin_strategies"] = toin_strategies
+
+    # ── Recommendations (headroom >= 0.31) ───────────────────────────────────
+    m = re.search(r"Recommendations\n-+\n(.*?)(?:\n\s*\n|\Z)", output, re.DOTALL)
+    if m:
+        recs = re.findall(r"^\s*\d+\.\s+(.+)$", m.group(1), re.MULTILINE)
+        if recs:
+            d["recommendations"] = recs
 
     # ── Log metadata ─────────────────────────────────────────────────────────
     m = re.search(r"Log files:\s+(\d+)", output)

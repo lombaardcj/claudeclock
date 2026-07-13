@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="usage_data.js"></script><!-- written by poll_usage.py; enables file:// mode -->
+  <script src="headroom-perf/perf_data.js"></script><!-- written by collect.py; enables file:// mode -->
   <style>
     /* ── Stats panel ── */
     #stats-panel { display: none; }
@@ -80,6 +81,16 @@
     .nerds-key { color: #4a4a6a; }
     .nerds-val { color: #8888b8; text-align: right; }
     .nerds-val.hi { color: #00d4ff; }
+    .new-tag {
+      display: inline-block; margin-left: 6px; padding: 1px 5px;
+      font-size: 7px; letter-spacing: 2px; border-radius: 3px;
+      color: #00ff88; border: 1px solid #00ff8855; background: #00ff8811;
+      vertical-align: middle; animation: newtag-pulse 2s ease-in-out infinite;
+    }
+    @keyframes newtag-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .45; }
+    }
 
     .stats-window-note {
       font-size: 9px; color: #3a3a5a; letter-spacing: 1px;
@@ -559,6 +570,17 @@
       </div>
 
       <div class="nerds-group">
+        <div class="nerds-group-label">throughput (tok/s, p50 / p95)<span class="new-tag">NEW</span></div>
+        <div class="nerds-grid">
+          <div class="nerds-row"><span class="nerds-key">generation</span><span class="nerds-val hi" id="nn-tp-gen">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">input (active)</span><span class="nerds-val" id="nn-tp-input">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">input (wall-clock)</span><span class="nerds-val" id="nn-tp-wall">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">compression</span><span class="nerds-val" id="nn-tp-comp">—</span></div>
+          <div class="nerds-row"><span class="nerds-key">forward</span><span class="nerds-val" id="nn-tp-fwd">—</span></div>
+        </div>
+      </div>
+
+      <div class="nerds-group">
         <div class="nerds-group-label">toin</div>
         <div class="nerds-grid">
           <div class="nerds-row"><span class="nerds-key">patterns</span><span class="nerds-val" id="nn-to-patt">—</span></div>
@@ -572,6 +594,11 @@
       <div class="nerds-group">
         <div class="nerds-group-label">models</div>
         <div id="nn-models"></div>
+      </div>
+
+      <div class="nerds-group" id="nn-recs-group" style="display:none">
+        <div class="nerds-group-label">headroom recommendations<span class="new-tag">NEW</span></div>
+        <div id="nn-recs"></div>
       </div>
 
       <div class="nerds-group">
@@ -602,6 +629,15 @@ function pad(n) { return String(n).padStart(2,'0'); }
 function fmtCountdown(ms) {
   const s = Math.max(0, Math.floor(ms/1000));
   return `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
+}
+// SAST is UTC+2 (no DST) — wall-clock time to come back for.
+function fmtSAST(date) {
+  const d = new Date(date.getTime() + 2*3600000);
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+function sastDay(date) {
+  const d = new Date(date.getTime() + 2*3600000);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()];
 }
 function nextWeekdayAt13(from) {
   const d = new Date(from);
@@ -637,7 +673,7 @@ function tickClock() {
     subEl.textContent = 'weekend — no throttling';
     subEl.className = 'answer-sub good';
     next = nextWeekdayAt13(now);
-    nextLabel = `Mon ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+    nextLabel = `Mon <strong>${fmtSAST(next)} SAST</strong>`;
     cdLbl.textContent = 'peak window opens in';
     info.innerHTML = 'Weekends have <strong>zero throttling</strong>. Best time for heavy workloads.';
   } else if (isPeak) {
@@ -645,7 +681,7 @@ function tickClock() {
     subEl.textContent = 'peak hours — quota drains faster';
     subEl.className = 'answer-sub bad';
     next = new Date(now); next.setUTCHours(PEAK_END,0,0,0);
-    nextLabel = `today ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+    nextLabel = `today <strong>${fmtSAST(next)} SAST</strong>`;
     cdLbl.textContent = 'off-peak resumes in';
     info.innerHTML = 'Mon–Fri <strong>13:00–19:00 UTC</strong>: quota drains faster toward weekly limit.';
   } else {
@@ -654,16 +690,16 @@ function tickClock() {
     subEl.className = 'answer-sub good';
     if (utcF < PEAK_START) {
       next = new Date(now); next.setUTCHours(PEAK_START,0,0,0);
-      nextLabel = `today ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+      nextLabel = `today <strong>${fmtSAST(next)} SAST</strong>`;
     } else {
       next = nextWeekdayAt13(now);
-      nextLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][next.getDay()]} ${next.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} local`;
+      nextLabel = `${sastDay(next)} <strong>${fmtSAST(next)} SAST</strong>`;
     }
     cdLbl.textContent = 'peak window starts in';
     info.innerHTML = 'Off-peak: quota is not accelerated. Use freely outside <strong>13:00–19:00 UTC weekdays</strong>.';
   }
   cdVal.textContent = fmtCountdown(next-now);
-  cdUnt.textContent = `→ ${nextLabel}`;
+  cdUnt.innerHTML = `→ ${nextLabel}`;
 }
 tickClock();
 setInterval(tickClock, 1000);
@@ -827,7 +863,7 @@ function renderKPI(id, proj, resetAtStr, rateUnit, rateMultiplier, instantRate) 
   fill.style.width      = Math.min(100, pct) + '%';
   fill.style.background = color;
 
-  // Reset time — 5h shows countdown, 7d shows day+time like the website
+  // Reset time — 5h shows countdown, 7d shows day+time; both in SAST wall-clock
   const sub = document.getElementById(`kpi-${id}-sub`);
   if (resetAtStr) {
     const resetAt = new Date(resetAtStr);
@@ -835,15 +871,13 @@ function renderKPI(id, proj, resetAtStr, rateUnit, rateMultiplier, instantRate) 
     if (id === '5h') {
       if (diff > 0) {
         const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000);
-        sub.textContent = `resets in ${h}h ${m}m`;
+        sub.innerHTML = `resets in ${h}h ${m}m · <strong>${fmtSAST(resetAt)} SAST</strong>`;
       } else {
         sub.textContent = 'reset due';
       }
     } else {
-      // e.g. "Resets Tue 1:00 AM"
-      const day  = resetAt.toLocaleDateString([], { weekday: 'short' });
-      const time = resetAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      sub.textContent = `Resets ${day} ${time}`;
+      // e.g. "Resets Tue 01:00 SAST"
+      sub.innerHTML = `Resets <strong>${sastDay(resetAt)} ${fmtSAST(resetAt)} SAST</strong>`;
     }
   }
 
@@ -868,8 +902,7 @@ function renderKPI(id, proj, resetAtStr, rateUnit, rateMultiplier, instantRate) 
       etaEl.textContent = `✓ resets first  (~${proj.pctAtReset?.toFixed(0)}% at reset)`;
       etaEl.className   = 'traj-eta safe';
     } else {
-      const timeStr = proj.eta.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      etaEl.textContent = `⚠ limit ~${timeStr}  (in ${fmtHours(proj.hoursToLimit)})`;
+      etaEl.innerHTML = `⚠ limit ~<strong>${fmtSAST(proj.eta)} SAST</strong>  (in ${fmtHours(proj.hoursToLimit)})`;
       etaEl.className   = `traj-eta ${proj.status}`;
     }
   }
@@ -1090,11 +1123,12 @@ function fmtTokens(n) {
 }
 
 async function loadStatsData() {
-  let payload = null;
+  // perf_data.js (written by collect.py) sets window.PERF_DATA — works from file://
+  let payload = window.PERF_DATA || null;
   try {
     const resp = await fetch('headroom-perf/perf_data.json?_=' + Date.now());
     if (resp.ok) payload = await resp.json();
-  } catch { /* server not running or file not yet generated */ }
+  } catch { /* file:// context or not yet generated */ }
 
   if (!payload || !(payload.readings || []).length) {
     showStatsNoData(); return;
@@ -1215,6 +1249,26 @@ function renderNerds(r) {
   document.getElementById('nn-cr-red').textContent   = r.cr_reduction_pct != null ? r.cr_reduction_pct + '%' : '—';
   document.getElementById('nn-cr-saved').textContent = fmtTokens(r.cr_tokens_saved);
   document.getElementById('nn-cr-uses').textContent  = r.cr_uses?.toLocaleString() ?? '—';
+
+  // Throughput (only present in headroom >= 0.27 snapshots)
+  const fmtP = (p50, p95) => p50 != null
+    ? `${p50.toLocaleString()} / ${p95.toLocaleString()}` : '—';
+  document.getElementById('nn-tp-gen').textContent   = fmtP(r.tp_gen_p50, r.tp_gen_p95);
+  document.getElementById('nn-tp-input').textContent = fmtP(r.tp_input_p50, r.tp_input_p95);
+  document.getElementById('nn-tp-wall').textContent  = r.tp_input_wallclock != null
+    ? r.tp_input_wallclock.toLocaleString() : '—';
+  document.getElementById('nn-tp-comp').textContent  = fmtP(r.tp_compress_p50, r.tp_compress_p95);
+  document.getElementById('nn-tp-fwd').textContent   = fmtP(r.tp_forward_p50, r.tp_forward_p95);
+
+  // Recommendations
+  const recsGroup = document.getElementById('nn-recs-group');
+  if (r.recommendations?.length) {
+    recsGroup.style.display = 'block';
+    document.getElementById('nn-recs').innerHTML = r.recommendations.map(rec =>
+      `<div class="nerds-row"><span class="nerds-key">${rec}</span></div>`).join('');
+  } else {
+    recsGroup.style.display = 'none';
+  }
 
   // TOIN
   document.getElementById('nn-to-patt').textContent  = r.toin_patterns?.toLocaleString()    ?? '—';
