@@ -7,3 +7,7 @@ __pycache__/
 *.pyc
 usage_data.js
 venv/
+headroom-perf/perf_history.jsonl
+headroom-perf/perf_data.json
+headroom-perf/perf_data.js
+headroom-perf/collect.log

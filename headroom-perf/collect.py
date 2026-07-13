@@ -9,7 +9,7 @@ Suggested cron (every minute):
 import json
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 BASE = Path(__file__).parent
@@ -17,6 +17,13 @@ HEADROOM_BIN = Path("/home/chrisl/codetest/headroom/.venv/bin/headroom")
 HIST_FILE = BASE / "perf_history.jsonl"
 DATA_FILE = BASE / "perf_data.json"
 JS_FILE = BASE / "perf_data.js"
+
+# The dashboard only charts the last 7 days, so we keep history no longer than
+# that. Consecutive readings whose charted metrics are all unchanged are
+# collapsed to the first occurrence — headroom perf barely moves minute-to-minute,
+# so this drops ~90% of rows while preserving every visible trend point.
+RETENTION_DAYS = 7
+DEDUP_KEYS = ("reduction_pct", "cache_hit_rate", "tokens_saved", "overhead_avg_ms", "requests")
 
 
 def run_perf() -> str:
@@ -225,6 +232,39 @@ def parse_perf(output: str) -> dict:
     return d
 
 
+def prune_and_dedup_history():
+    """Rewrite perf_history.jsonl keeping only the last RETENTION_DAYS and
+    collapsing consecutive readings whose DEDUP_KEYS are all identical (keeping
+    the first of each run, so its `raw` field is preserved)."""
+    if not HIST_FILE.exists():
+        return
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    kept = []
+    prev_sig = None
+    with open(HIST_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+                ts = datetime.fromisoformat(r["ts"])
+            except (json.JSONDecodeError, KeyError, ValueError):
+                continue
+            if ts < cutoff:
+                continue
+            sig = tuple(r.get(k) for k in DEDUP_KEYS)
+            if sig == prev_sig:
+                continue
+            prev_sig = sig
+            kept.append(line)
+    tmp = HIST_FILE.with_name(HIST_FILE.name + ".tmp")
+    with open(tmp, "w") as f:
+        if kept:
+            f.write("\n".join(kept) + "\n")
+    tmp.replace(HIST_FILE)
+
+
 def rebuild_data_file():
     readings = []
     if HIST_FILE.exists():
@@ -259,6 +299,7 @@ def main():
     with open(HIST_FILE, "a") as f:
         f.write(json.dumps(metrics) + "\n")
 
+    prune_and_dedup_history()
     rebuild_data_file()
 
     print(
